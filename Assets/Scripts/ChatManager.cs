@@ -11,42 +11,32 @@ public class ChatManager : MonoBehaviour, IChatClientListener
 {
     private ChatClient chatClient;
     public string playerName;
+
     public TMPro.TextMeshProUGUI chatDisplay; // Assign in the Inspector
     public TMPro.TMP_InputField inputFieldGlobalChat; // Assign in the Inspector
-
 
     public Button privateSendTextButton;
     public GameObject privateChatUI; // Private chat UI
     public TMPro.TMP_InputField inputFieldPrivateChat; // Assign in the Inspector
     public TMPro.TextMeshProUGUI privateChatDisplay; // Private chat message display
+
     private string privateChatRecipient = ""; // Store the recipient's name
     private bool isPrivateChatActive = false; // Flag to check if private chat is active
 
-
-
+    public GameObject globalChatNotification; // Notification for global chat (e.g., icon or counter)
+    public GameObject privateChatNotification; // Notification for private chat (e.g., icon or counter)
 
     private string targetPlayerName = ""; // The player to chat with
 
-
     private string appIdChat = "44a5b792-4407-431f-9bd0-89b96f22b833";
-
-
-    /*private void Start()
-    {
-        playerName = PhotonNetwork.NickName; // Use the player's Photon nickname
-        ConnectToChat();
-    }*/
 
     private void Start()
     {
-        /*playerName = PhotonNetwork.NickName; // Use the player's Photon nickname
-        //PhotonNetwork.NickName = playerName;
-        chatClient = new ChatClient(this);
-        chatClient.Connect(appIdChat, "1.0", new Photon.Chat.AuthenticationValues(playerName));
-        Debug.Log($"Attempting to connect to Photon Chat as {playerName}");*/
         playerName = PhotonNetwork.NickName;
         ConnectToChat();
-        privateChatUI.SetActive(true); // Hide private chat UI initially
+        //privateChatUI.SetActive(false); // Hide private chat UI initially
+        globalChatNotification.SetActive(false); // Hide global chat notification
+        privateChatNotification.SetActive(false); // Hide private chat notification
     }
 
     private void Update()
@@ -54,7 +44,6 @@ public class ChatManager : MonoBehaviour, IChatClientListener
         if (chatClient != null)
         {
             chatClient.Service();
-            //Debug.Log("ChatClient Service Running");
         }
         else
         {
@@ -64,7 +53,6 @@ public class ChatManager : MonoBehaviour, IChatClientListener
 
     private void ConnectToChat()
     {
-        Debug.Log("Connect to chat!");
         chatClient = new ChatClient(this);
         chatClient.Connect(PhotonNetwork.PhotonServerSettings.AppSettings.AppIdChat, "1.0", new AuthenticationValues(playerName));
     }
@@ -72,7 +60,7 @@ public class ChatManager : MonoBehaviour, IChatClientListener
     // Method to handle global chat messages
     public void SendGlobalChatMessage()
     {
-        if (inputFieldGlobalChat.text != string.Empty)
+        if (!string.IsNullOrEmpty(inputFieldGlobalChat.text))
         {
             chatClient.PublishMessage("Global", inputFieldGlobalChat.text); // Send to Global chat
             inputFieldGlobalChat.text = string.Empty;
@@ -87,6 +75,7 @@ public class ChatManager : MonoBehaviour, IChatClientListener
         privateChatUI.SetActive(true); // Show private chat UI
         privateChatDisplay.text = ""; // Clear the previous chat
         AddMessageToPrivateChat($"You are now chatting with {recipient}");
+        privateChatNotification.SetActive(false); // Clear private chat notifications when active
     }
 
     // Method to send private messages to the recipient
@@ -119,19 +108,27 @@ public class ChatManager : MonoBehaviour, IChatClientListener
 
         photonView.RPC("ReceivePrivateMessage", targetPlayer, PhotonNetwork.NickName, targetPlayerName, inputFieldPrivateChat.text);
 
-        // Add message to the private chat UI
         AddMessageToPrivateChat($"Me: {inputFieldPrivateChat.text}");
         inputFieldPrivateChat.text = ""; // Clear input field
     }
 
-
     [PunRPC]
     public void ReceivePrivateMessage(string senderName, string receiverName, string message, PhotonMessageInfo info)
     {
-        // Ensure the message is for the current player
         if (receiverName == PhotonNetwork.NickName)
         {
-            AddMessageToChat($"{senderName}: {message}");
+            AddMessageToPrivateChat($"{senderName}: {message}");
+            Debug.Log("notification is not working properly!");
+            if (!privateChatUI.activeSelf)
+            {
+                privateChatNotification.SetActive(true); // Show notification for private chat
+            }
+            else
+            {
+                privateChatUI.SetActive(true);
+                privateChatNotification.SetActive(true);
+            }
+            ShowNotificationForSometime(privateChatNotification);
         }
     }
 
@@ -143,6 +140,18 @@ public class ChatManager : MonoBehaviour, IChatClientListener
             if (channelName == "Global")
             {
                 AddMessageToChat($"{senders[i]}: {messages[i]}");
+
+                if (!chatDisplay.gameObject.activeSelf)
+                {
+                    globalChatNotification.SetActive(true); // Show notification for global chat
+                    chatDisplay.gameObject.SetActive(true);
+                }
+                else
+                {
+                    globalChatNotification.SetActive(true);
+                    chatDisplay.gameObject.SetActive(true);
+                }
+                ShowNotificationForSometime(globalChatNotification);
             }
             else
             {
@@ -151,65 +160,47 @@ public class ChatManager : MonoBehaviour, IChatClientListener
         }
     }
 
-    //Add message to global chat
+    public IEnumerator ShowNotificationForSometime(GameObject obj)
+    {
+        yield return new WaitForSeconds(5f);
+        obj.SetActive(false);
+    }
+
     private void AddMessageToChat(string message)
     {
         chatDisplay.text += message + "\n";
     }
 
-    // Add message to private chat
     private void AddMessageToPrivateChat(string message)
     {
         privateChatDisplay.text += message + "\n";
     }
 
-    // Handle private message from a specific player
     public void OnPrivateMessage(string sender, object message, string channelName)
     {
-        if (isPrivateChatActive)
-        {
-            AddMessageToPrivateChat($"From {sender}: {message}");
-        }
+        AddMessageToPrivateChat($"From {sender}: {message}");
     }
-
-
-    
-
 
     public void OnChatStateChange(ChatState state) { }
     public void DebugReturn(DebugLevel level, string message) { }
     public void OnDisconnected() { }
     public void OnConnected()
     {
-        //chatClient.Subscribe("Global"); // Join the Global channel
         SubscribingToChannel("Global");
         AddMessageToChat($"You joined the chat as {playerName}.");
     }
 
-
     public void OnUnsubscribed(string[] channels) { }
-    //public void OnPrivateMessage(string sender, object message, string channelName) { }
     public void OnStatusUpdate(string user, int status, bool gotMessage, object message) { }
 
-    
-
-    public void OnUserSubscribed(string channel, string user)
-    {
-        throw new System.NotImplementedException();
-    }
-
-    public void OnUserUnsubscribed(string channel, string user)
-    {
-        throw new System.NotImplementedException();
-    }
+    public void OnUserSubscribed(string channel, string user) { }
+    public void OnUserUnsubscribed(string channel, string user) { }
 
     public void OnSubscribed(string[] channels, bool[] results)
     {
         Debug.Log($"Subscribed to channel: {string.Join(", ", channels)}");
-        //AddMessageToChat("Subscribed to Global chat.");
     }
 
-    // Click to start a private chat with another player
     public void OnPlayerProfileClick(string playerName)
     {
         StartPrivateChat(playerName); // Start private chat when clicking a player profile
@@ -219,8 +210,4 @@ public class ChatManager : MonoBehaviour, IChatClientListener
     {
         chatClient.Subscribe(str);
     }
-
-
-
 }
-
